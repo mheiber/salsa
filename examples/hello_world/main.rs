@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, thread::sleep};
 
 ///////////////////////////////////////////////////////////////////////////
 // Step 1. Define the query group
@@ -34,6 +34,8 @@ trait HelloWorld: salsa::Database {
     #[salsa::input]
     fn input_string(&self, key: ()) -> Arc<String>;
 
+    fn untracked(&self, key: ()) -> String;
+
     // This is a *derived query*, meaning its value is specified by
     // a function (see Step 2, below).
     fn length(&self, key: ()) -> usize;
@@ -42,6 +44,15 @@ trait HelloWorld: salsa::Database {
 
 ///////////////////////////////////////////////////////////////////////////
 // Step 2. Define the queries.
+
+fn untracked(db: &dyn HelloWorld, _key: ()) -> String {
+    println!("running");
+
+    db.salsa_runtime().report_untracked_read();
+    let x = std::fs::read(file!()).unwrap();
+    let x: String = String::from_utf8_lossy(x.as_ref()).into_owned();
+    x
+}
 
 // Define the **function** for the `length` query. This function will
 // be called whenever the query's value must be recomputed. After it
@@ -53,10 +64,10 @@ trait HelloWorld: salsa::Database {
 // methods from other query groups that we don't know about.
 fn length(db: &dyn HelloWorld, (): ()) -> usize {
     // Read the input string:
-    let input_string = db.input_string(());
+    // let input_string = db.input_string(());
 
     // Return its length:
-    input_string.len()
+    db.untracked(()).len()
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -99,6 +110,10 @@ fn main() {
     // println!("Initially, the length is {}.", db.length(()));
 
     db.set_input_string((), Arc::new("Hello, world".to_string()));
+    loop {
+        println!("Now, the length is {}.", db.length(()));
+        sleep(std::time::Duration::from_secs(3))
 
-    println!("Now, the length is {}.", db.length(()));
+    }
+
 }
